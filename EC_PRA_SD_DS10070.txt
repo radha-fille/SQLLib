@@ -1,0 +1,35 @@
+Check Name : EC_PRA_SD_DS10070
+        Programmer Name : kolie.bolleurs@iconplc.com
+        Date Created : 02-NOV-2022
+        Desc : 
+        All loglines on DSRC form have been inactivated, AND RFICYN = Yes
+        ********************************************************************/
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        Subject subj = afp.ActionDataPoint.Record.Subject;
+        DataPoint dpAction = afp.ActionDataPoint;
+
+        int count = 0;
+        bool fireQuery = false;
+        string queryText = "All log lines on the Protocol Amendment Re-Consent form have been inactivated, however, Did the subject re-consent to a subsequent protocol amendment version? is recorded as Yes. Please amend.";
+
+        int markingGroup = 1;
+        bool requiredResponse = false;
+        bool manualClose = false;
+        if (dpAction != null && dpAction.Active)
+        {
+            if (string.Compare(dpAction.Data , "Y", true) == 0)
+            {
+                DataPage dpg = dpAction.Record.DataPage;
+                Records rds = dpg.Records;
+                for (int i = 0; i < rds.Count; i++)
+                {
+                    if (rds[i].RecordPosition == 0 || !rds[i].Active) continue;
+                    count = 1;
+                    break;
+                }
+                if (count == 0) fireQuery = true;
+            }
+        }
+        CustomFunction.PerformQueryAction(queryText, markingGroup, requiredResponse, manualClose, dpAction, fireQuery, afp.CheckID, afp.CheckHash);
+        return null;

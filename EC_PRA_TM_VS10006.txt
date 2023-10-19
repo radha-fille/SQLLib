@@ -1,0 +1,47 @@
+//Created: kolie.bolleurs@iconplc.com
+        //Date: 07-Nov-2022
+        //Custom Function: EC_PRA_TM_VS10006
+        //Edit Checks:EC_PRA_TM_VS10006
+        //Description:
+        //If Unit = CM and HEIGHT_VSORRES  < 121 or > 213 OR  if Unit = in and HEIGHT_VSORRES < 48 or > 84
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        DataPoint dpAction = afp.ActionDataPoint;
+        Subject subject = dpAction.Record.Subject;
+
+        bool fireQuery = false;
+        string queryText = "Height is out of expected range.  Please clarify or amend.";
+        int markingGroup = 1;
+        bool requiredResponse = false;
+        bool manualClose = false;
+
+        double hgtIn = double.MinValue;
+        double hgtCM = double.MinValue;
+
+        // ------------------------------------------------------//
+
+        if (string.Compare(dpAction.Data, string.Empty, true) != 0 && dpAction.UnitDictionaryEntry != null)
+        {
+            if (dpAction.UnitDictionaryEntry.UserUnitString.ToUpper() == "IN")
+            {
+                if (Number.IsValidNumber(dpAction.Data))
+                {
+                    hgtIn = Convert.ToDouble(dpAction.Data);
+                    if (hgtIn < 48 || hgtIn > 84)
+                    fireQuery = true;
+                }
+            }
+            else if (dpAction.UnitDictionaryEntry.UserUnitString.ToUpper() == "CM")
+            {
+                if (Number.IsValidNumber(dpAction.Data))
+                {
+                    hgtCM = Convert.ToDouble(dpAction.Data);
+                    if (hgtCM < 121 || hgtCM > 213)
+                    fireQuery = true;
+                }
+            }
+        }
+
+        CustomFunction.PerformQueryAction(queryText, markingGroup, requiredResponse, manualClose, dpAction, fireQuery);
+
+        return null;

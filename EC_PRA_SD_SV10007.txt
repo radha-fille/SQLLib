@@ -1,0 +1,65 @@
+//Created: kolie.bolleurs@iconplc.com
+        //Date: 07-Nov-2022
+        //Custom Function: EC_PRA_SD_SV10007
+        //Edit Checks:EC_PRA_SD_SV10007
+        //Description:
+        //If any field = 1  and corresponding form OID <> submitted and DSES.DSSTDAT <> empty (i.e. if field EGCL = 1 and EGCL <> submitted and DSES.DSSTDAT <> empty)
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        DataPoint dpAction = afp.ActionDataPoint;
+        Instance inst = dpAction.Record.Instance;
+        Subject subj = dpAction.Record.Subject;
+
+        int markingGroupId = 1;
+        bool requiredResponse = false;
+        bool manualClose = false;
+        string queryText = "Assessment has been checked; however, the corresponding form has not been entered. Please reconcile.";
+
+        // -- VARIABLES DECLARATION ------------------------------------------------
+        bool visuSubmitted = false;
+        bool isDSSTDATValid = false;
+        const string DSES_FORMOID = "DSES";
+        const string DSSTDAT_FIELDOID = "DSSTDAT";
+        const string CHECKED = "1";
+        const string VISU_FORMOID = "VISU";
+        // -- END VARIABLE DECLARATION ---------------------------------------------
+
+        if (inst != null)
+        {
+            DataPoints dpsDSSTDAT = CustomFunction.FetchAllDataPointsForOIDPath(DSSTDAT_FIELDOID, DSES_FORMOID, null, subj);
+            if (dpsDSSTDAT.Count > 0)
+            {
+                DataPoint dpDSSTDAT = dpsDSSTDAT[0];
+                if (dpDSSTDAT.StandardValue() is DateTime && dpDSSTDAT.Data.ToString() != string.Empty)
+                isDSSTDATValid = true;
+            }
+
+            DataPage dpgVISU = inst.DataPages.FindByFormOID(VISU_FORMOID);
+            if (dpgVISU != null && dpgVISU.Active)
+            {
+                DataPoints dpsVISU = dpgVISU.MasterRecord.DataPoints;
+                for (int i = 0; i < dpsVISU.Count; i++)
+                {
+                    visuSubmitted = false;
+                    string strField = string.Empty;
+
+                    if(dpsVISU[i].Active && dpsVISU[i].Data.ToString() == "1" && isDSSTDATValid)
+                    {
+                        visuSubmitted = true;
+                        if (dpsVISU[i].Field.OID == "EGLR")
+                            strField = "EGLR3";
+                        else if (dpsVISU[i].Field.OID == "NE")
+                            strField = "NE3";
+                        else
+                            strField = dpsVISU[i].Field.OID;
+
+                        DataPage dpgVisu = inst.DataPages.FindByFormOID(strField);
+
+                        if (dpgVisu != null && dpgVisu.IsBitSet(Status.IsTouched))
+                            visuSubmitted = false;
+                    }
+                    CustomFunction.PerformQueryAction(queryText, markingGroupId, requiredResponse, manualClose, dpsVISU[i], visuSubmitted, afp.CheckID, afp.CheckHash);
+                }
+            }
+        }
+        return null;

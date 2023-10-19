@@ -1,0 +1,37 @@
+// Developer: Seamus
+            // Date: 23Jul2020
+            // Custom Function: EC_PRA_SD_CM10003
+            // Edit Check/s: EC_PRA_SD_CM10003, EC_PRA_SD_CM10003_CM, EC_PRA_SD_CM10003_DSES
+            // CMYN.CMYN = Y and DSES form = submitted and no CM form has been submitted
+
+
+            ActionFunctionParams afp = (ActionFunctionParams)ThisObject;
+            Subject subj = afp.ActionDataPoint.Record.Subject;
+            DataPoint dpAction = afp.ActionDataPoint;
+
+            bool DSES_Present = false;
+            Instance ins_DSES = subj.Instances.FindByFolderOID("DSES");
+            DataPage dpgDSES = ins_DSES != null ? ins_DSES.DataPages.FindByFormOID("DSES") : null;
+            if (dpgDSES != null && dpgDSES.IsBitSet(Status.IsTouched))
+            {
+                DSES_Present = true;
+            }
+
+            string queryText = "Were any medications taken? is Yes, however the Prior/Concomitant Medications form is missing. Please reconcile.";
+
+            if (dpAction != null && dpAction.Active)
+            {
+                bool fireQuery = false;
+                if (string.Compare(dpAction.Data, "Y") == 0 && DSES_Present)
+                {
+                    Instance inst = dpAction.Record.DataPage.Instance;
+                    DataPage dpgCM = inst != null ? inst.DataPages.FindByFormOID("CM") : null;
+                    if (dpgCM != null && !dpgCM.IsBitSet(Status.IsTouched))
+                    {
+                        fireQuery = true;
+                    }
+                }
+                CustomFunction.PerformQueryAction(queryText, 1, false, false, dpAction, fireQuery);
+            }
+
+            return null;

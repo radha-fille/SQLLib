@@ -1,0 +1,147 @@
+Check Name : EC_PRA_SD_CM10018
+        Programmer Name : kolie.bolleurs@iconplc.com
+        Edit Checks : EC_PRA_SD_CM10018, EC_PRA_SD_CM10018_CROSS
+        Date Created : 28-OCT-2022
+        Desc : CM.CMAENO <> empty and CMSTDAT < AE.AESTDAT
+        ********************************************************************/
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        DataPoint dpAction = afp.ActionDataPoint;
+        Subject sub = dpAction.Record.Subject;
+
+        // ---- STUDY SPECIFIC REFERENCES CHANGED HERE ----------//
+        const string CM_FORMOID = "CM";
+        const string CMSTDAT_FIELDOID = "CMSTDAT";
+        const string CMAENO_FIELDOID = "CMAENO";
+
+        const string AE_FORMOID = "AE";
+        const string AESTDAT_FIELDOID = "AESTDAT";
+        // ------------------------------------------------------//
+
+
+        // ---- Other constants ----------------------------------- //
+        const int SITE_BY_SYSTEM = 1;
+        const bool ANSWER_ON_CHANGE = false, CLOSE_ON_CHANGE = false;
+        const string QUERYTEXT = "The start date of this medication is before the start date of the corresponding Adverse Event. Please clarify or amend.";
+        // -------------------------------------------------------- //
+
+        DataPoints dpsAEDT = CustomFunction.FetchAllDataPointsForOIDPath(AESTDAT_FIELDOID, AE_FORMOID, null, sub);
+        DataPoints dpsCMSTDAT = CustomFunction.FetchAllDataPointsForOIDPath(CMSTDAT_FIELDOID, CM_FORMOID, null, sub);
+        bool FireQuery = false;
+
+        for (int i = 0; i < dpsCMSTDAT.Count; i++)
+        {
+            FireQuery = false;
+
+            DataPoint dpDSL = dpsCMSTDAT[i].Record.DataPoints.FindByFieldOID(CMAENO_FIELDOID);
+
+            if (dpDSL != null && string.Compare(dpDSL.Data.Trim(), string.Empty, true) != 0 &&
+!dpDSL.IsBitSet(Status.IsNonConformant))
+            {
+                string strDSL = dpDSL.Data;
+                string[] strSplit = strDSL.Split('-');
+
+                int recPos = int.MinValue;
+
+                if (strSplit.Length > 0 && Number.IsValidInteger(strSplit[0].Trim()))
+                recPos = Convert.ToInt32(strSplit[0]);
+
+                if (recPos != int.MinValue && dpsCMSTDAT[i].StandardValue() is DateTime)
+                {
+                    DateTime dtCM = Convert.ToDateTime(dpsCMSTDAT[i].StandardValue());
+
+                    for (int j = 0; j < dpsAEDT.Count && !FireQuery; j++)
+                    {
+                        if (recPos == dpsAEDT[j].Record.RecordPosition)
+                        {
+                            if (dpsAEDT[j].StandardValue() is DateTime )
+                            {
+                                DateTime dtAE = Convert.ToDateTime(dpsAEDT[j].StandardValue());
+                                if (dtCM < dtAE)
+                                FireQuery = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            CustomFunction.PerformQueryAction(QUERYTEXT, SITE_BY_SYSTEM, ANSWER_ON_CHANGE, CLOSE_ON_CHANGE, dpsCMSTDAT[i], FireQuery);
+        }
+        return null;
+CSharp	  
+EC_PRA_SD_CM10019
+  
+C#
+
+/***********************************************************************
+        Check Name : EC_PRA_SD_CM10019
+        Programmer Name : kolie.bolleurs@iconplc.com
+        Edit Checks : EC_PRA_SD_CM10019, EC_PRA_SD_CM10019_CROSS
+        Date Created : 28-OCT-2022
+        Desc : CM.CMMHNO <> empty and CM.CMSTDAT < MH.MHSTDAT
+        ********************************************************************/
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        DataPoint dpAction = afp.ActionDataPoint;
+        Subject sub = dpAction.Record.Subject;
+
+        // ---- STUDY SPECIFIC REFERENCES CHANGED HERE ----------//
+        const string CM_FORMOID = "CM";
+        const string CMSTDAT_FIELDOID = "CMSTDAT";
+        const string CMMHNO_FIELDOID = "CMMHNO";
+
+        const string MH_FORMOID = "MH";
+        const string MSTDAT_FIELDOID = "MHSTDAT";
+        // ------------------------------------------------------//
+
+
+        // ---- Other constants ----------------------------------- //
+        const int SITE_BY_SYSTEM = 1;
+        const bool ANSWER_ON_CHANGE = false, CLOSE_ON_CHANGE = false;
+        const string QUERYTEXT = "The start date of this medication is before the start date of the corresponding Medical History. Please clarify or amend.";
+        // -------------------------------------------------------- //
+
+        DataPoints dpsMHDT = CustomFunction.FetchAllDataPointsForOIDPath(MSTDAT_FIELDOID, MH_FORMOID, null, sub);
+        DataPoints dpsCMSTDAT = CustomFunction.FetchAllDataPointsForOIDPath(CMSTDAT_FIELDOID, CM_FORMOID, null, sub);
+        bool FireQuery = false;
+
+        for (int i = 0; i < dpsCMSTDAT.Count; i++)
+        {
+            FireQuery = false;
+
+            DataPoint dpDSL = dpsCMSTDAT[i].Record.DataPoints.FindByFieldOID(CMMHNO_FIELDOID);
+
+            if (dpDSL != null && string.Compare(dpDSL.Data.Trim(), string.Empty, true) != 0 &&
+!dpDSL.IsBitSet(Status.IsNonConformant))
+            {
+                string strDSL = dpDSL.Data;
+                string[] strSplit = strDSL.Split('-');
+
+                int recPos = int.MinValue;
+
+                if (strSplit.Length > 0 && Number.IsValidInteger(strSplit[0].Trim()))
+                recPos = Convert.ToInt32(strSplit[0]);
+
+                if (recPos != int.MinValue && dpsCMSTDAT[i].StandardValue() is DateTime)
+                {
+                    DateTime dtCM = Convert.ToDateTime(dpsCMSTDAT[i].StandardValue());
+
+                    for (int j = 0; j < dpsMHDT.Count && !FireQuery; j++)
+                    {
+                        if (recPos == dpsMHDT[j].Record.RecordPosition)
+                        {
+                            if (dpsMHDT[j].StandardValue() is DateTime)
+                            {
+                                DateTime dtMH = Convert.ToDateTime(dpsMHDT[j].StandardValue());
+                                if (dtCM < dtMH)
+                                FireQuery = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            CustomFunction.PerformQueryAction(QUERYTEXT, SITE_BY_SYSTEM, ANSWER_ON_CHANGE, CLOSE_ON_CHANGE, dpsCMSTDAT[i], FireQuery);
+        }
+        return null;
+ 

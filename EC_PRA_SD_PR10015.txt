@@ -1,0 +1,85 @@
+/***********************************************************************
+        Check Name : EC_PRA_SD_PR10015
+        Programmer Name : kolie.bolleurs@iconplc.com
+        Edit Checks : EC_PRA_SD_PR10015, EC_PRA_SD_PR10015_CROSS
+        Date Created : 28-OCT-2022
+        Desc : MH.MHSTDAT or MH.MHTERM are updated or if line is inactivated for corresponding MH, PR.PRMHNO will become non-conformant.
+        ********************************************************************/
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        DataPoint dpAction = afp.ActionDataPoint;
+        Subject subject = dpAction.Record.Subject;
+
+        // variable declaration start
+        const string FLD_OID_DSL1 = "PRMHNO";
+        const string FORM_OID_ECCR = "PR";
+
+        const string FLD_OID_MHTERM = "MHTERM";
+        const string FLD_OID_MHDT = "MHSTDAT";
+        const string FORM_OID_MH = "MH";
+
+        //
+
+        DataPoints dpsPR = CustomFunction.FetchAllDataPointsForOIDPath(FLD_OID_DSL1, FORM_OID_ECCR, null, subject);
+        DataPoints dpsMH = CustomFunction.FetchAllDataPointsForOIDPath(FLD_OID_MHTERM, FORM_OID_MH, null, subject);
+        ArrayList alDSLData = GetDSLData(dpsMH, FLD_OID_MHDT, subject);
+        SetThisDPNonConformant(dpsPR, alDSLData, afp);
+        return null;
+    }
+    // ---- Other constants ----------------------------------- //
+    const int SITE_BY_SYSTEM = 1;
+    const bool ANSWER_ON_CHANGE = false, CLOSE_ON_CHANGE = false;
+    const string QUERYTEXT = "Data has been updated for the corresponding Medical History. Please reselect the Medical History Identifier if applicable or confirm the indication.";
+    // -------------------------------------------------------- //
+
+    void SetThisDPNonConformant(DataPoints dps, ArrayList arList, ActionFunctionParams afp)
+    {
+        for (int i = 0; i < dps.Count; i++)
+        {
+            DataPoint dp = dps[i];
+            if (!dp.Active || dp.Record.RecordPosition == 0) continue;
+            if (dp.AltCodedData != null)
+            {
+                bool isDataExists = false;
+                for (int j = 0; j < arList.Count; j++)
+                {
+                    if (string.Compare(arList[j].ToString().Trim(), dp.Data.Trim(), true) == 0)
+                    {
+                        isDataExists = true;
+                        break;
+                    }
+                }
+                if (string.Compare(dp.Data.Trim(), string.Empty, true) == 0 || isDataExists)
+                {
+                    dp.SetNonConformant(false);
+                    CustomFunction.PerformQueryAction(QUERYTEXT, SITE_BY_SYSTEM, ANSWER_ON_CHANGE, CLOSE_ON_CHANGE, dps[i], false, afp.CheckID, afp.CheckHash);
+                }
+                else
+                {
+                    dp.SetNonConformant(true);
+                    CustomFunction.PerformQueryAction(QUERYTEXT, SITE_BY_SYSTEM, ANSWER_ON_CHANGE, CLOSE_ON_CHANGE, dps[i], true, afp.CheckID, afp.CheckHash);
+                }
+            }
+            else
+            {
+                dp.SetNonConformant(false);
+                CustomFunction.PerformQueryAction(QUERYTEXT, SITE_BY_SYSTEM, ANSWER_ON_CHANGE, CLOSE_ON_CHANGE, dps[i], false, afp.CheckID, afp.CheckHash);
+            }
+        }
+    }
+    private ArrayList GetDSLData(DataPoints dpsAE, string fldOID_Date, Subject subj)
+    {
+        ArrayList arList = new ArrayList();
+        for (int i = 0; i < dpsAE.Count; i++)
+        {
+            if (dpsAE[i] != null && dpsAE[i].Active)
+            {
+                DataPoint dpAeDt = dpsAE[i].Record.DataPoints.FindByFieldOID(fldOID_Date);
+                if (dpsAE[i].Data.Trim() != "" && dpAeDt != null)
+                {
+                    int recPos = dpsAE[i].Record.RecordPosition;
+                    string srp = recPos.ToString().Trim() + "-" + dpsAE[i].Data.Trim().ToUpper() + "-" + dpAeDt.Data.Trim().ToUpper();
+                    arList.Add(new KeyValue(srp, srp));
+                }
+            }
+        }
+        return arList;

@@ -1,0 +1,74 @@
+/***********************************************************************
+        Check Name : EC_PRA_SD_AE10030
+        Programmer Name : kolie.bolleurs@iconplc.com
+        Date Created : 02-NOV-2022
+        Desc :
+        AE.AEREL = DEFINITELY RELATED, PROBABLY RELATED, POSSIBLY RELATED, or UNLIKELY RELATED and AE.AESTDAT < Min.EXDT
+        ********************************************************************/
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        DataPoint dpAction = afp.ActionDataPoint;
+        Subject sub = dpAction.Record.Subject;
+        Instance inst = dpAction.Record.DataPage.Instance;
+
+        // Variable Declaration Start
+        string EXDateOID = "EXDT";
+        string EXFormOID = "EX";
+        string AEDateOID = "AESTDAT";
+        string AEFormOID = "AE";
+        string AEFolderOID = "AE";
+
+        string queryText = "Relationship to Study Treatment is Definitely Related, Probably Related, Possibly Related or Unlikely Related; however, the Start Date of this adverse event is prior to the first dosing date. Please amend.";
+        int markingGroupID = 1;
+        bool responseRequired = false;
+        bool manualCloseRequired = false;
+        bool fireQuery = false;
+
+        DateTime EXDT = DateTime.MaxValue;
+        DateTime mindt = DateTime.MaxValue;
+
+        if (dpAction != null && dpAction.Active)
+        {
+            //Get min EXDT
+            DataPoints dpEXDT = CustomFunction.FetchAllDataPointsForOIDPath(EXDateOID, EXFormOID, null, sub);
+
+            for (int i = 0; i < dpEXDT.Count; i++)
+            {
+                if (dpEXDT[i].Active && dpEXDT[i] != null && dpEXDT[i].Data.ToString() != string.Empty && dpEXDT[i].StandardValue() is DateTime)
+                {
+                    EXDT = Convert.ToDateTime(dpEXDT[i].StandardValue());
+
+                    if (EXDT <= mindt)
+                    mindt = EXDT;
+                }
+            }
+
+            //Get AEREL and AESTDAT
+            DataPoints dpAESTDAT = CustomFunction.FetchAllDataPointsForOIDPath(AEDateOID, AEFormOID, AEFolderOID, sub);
+
+            for (int j = 0; j < dpAESTDAT.Count; j++)
+            {
+                fireQuery = false;
+                if (dpAESTDAT[j].Active && dpAESTDAT[j] != null && dpAESTDAT[j].Data.ToString() != string.Empty && dpAESTDAT[j].StandardValue() is DateTime)
+                {
+                    DateTime dtAESTDAT = Convert.ToDateTime(dpAESTDAT[j].StandardValue());
+
+                    DataPoint dpAEREL = dpAESTDAT[j].Record.DataPoints.FindByFieldOID("AEREL");
+
+                    if (dpAEREL != null)
+                    {
+                        if (dpAEREL.Data != string.Empty && dpAEREL.Data != "NOT RELATED")
+                        {
+                            if (mindt != DateTime.MaxValue && dtAESTDAT != DateTime.MaxValue)
+                            {
+                                if (dtAESTDAT < mindt)
+                                    fireQuery = true;
+                            }
+                        }
+                    }
+                    CustomFunction.PerformQueryAction(queryText, markingGroupID, responseRequired, manualCloseRequired, dpAESTDAT[j], fireQuery);
+                }
+            }
+        }
+
+        return null;

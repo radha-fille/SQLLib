@@ -1,0 +1,46 @@
+// Developer: kolie.bolleurs@iconplc.com
+        // Date: 31OCT2022
+        // Custom Function: EC_PRA_CS_EG10025
+        // Edit Check/s: EC_PRA_CS_EG10025
+        // Short Description:
+        // (SUM of (QTCFAG_EGORRES for EGREPNUM = 1 ) + (QTCFAG_EGORRES for EGREPNUM = 2) + (QTCFAG_EGORRES for EGREPNUM = 3))/3 > 480
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        DataPoint dpAction = afp.ActionDataPoint;
+        Subject sub = dpAction.Record.Subject;
+
+        const string EGLR2_FORMOID = "EGLR2";
+        const string EGLR2_FOLDEROID = "SCREEN";
+        const string EGLR2_FIELDOID = "QTCFAG_EGORRES";
+
+        const int SITE_BY_SYSTEM = 1;
+        const bool ANSWER_ON_CHANGE = false, CLOSE_ON_CHANGE = false;
+        const string QUERYTEXT = "Possible Protocol Deviation: The mean value is > 480 ms for the readings for QTcF Interval, Aggregate (Fridericia's formula) recorded in the triplicate ECG at the Screening Visit. Please note that a mean value > 480 ms is exclusionary. Please clarify or amend.";
+        // -------------------------------------------------------- //
+
+        DataPoints dpsEGLR2 = CustomFunction.FetchAllDataPointsForOIDPath(EGLR2_FIELDOID, EGLR2_FORMOID, EGLR2_FOLDEROID, sub);
+        bool FireQuery = false;
+
+        Int32 intQTCFAG_EGORRES = 0;
+        Int32 intQTCFAG_EGORRES_Tot = 0;
+        Int32 intQTCFAG_EGORRES_Mean = 0;
+
+        if (dpAction != null && dpAction.Active)
+        {
+            for (int i = 0; i < dpsEGLR2.Count; i++)
+            {
+                if (dpsEGLR2[i] != null && dpsEGLR2[i].Active && dpsEGLR2[i].Data.ToString() != string.Empty)
+                {
+                    intQTCFAG_EGORRES = Convert.ToInt32(dpsEGLR2[i].Data.ToString());
+                    intQTCFAG_EGORRES_Tot += intQTCFAG_EGORRES;
+                }   
+            }
+            if (intQTCFAG_EGORRES_Tot > 0)
+                intQTCFAG_EGORRES_Mean = intQTCFAG_EGORRES_Tot / 3;
+
+            if (intQTCFAG_EGORRES_Mean > 480)
+                FireQuery = true;
+
+            CustomFunction.PerformQueryAction(QUERYTEXT, SITE_BY_SYSTEM, ANSWER_ON_CHANGE, CLOSE_ON_CHANGE, dpAction, FireQuery);
+        }
+        return null;

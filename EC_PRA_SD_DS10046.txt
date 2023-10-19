@@ -1,0 +1,58 @@
+Check Name : EC_PRA_SD_DS10046
+        Programmer Name : kolie.bolleurs@iconplc.com
+        Date Created : 02-NOV-2022
+        Desc : 
+        DSET.DSSTDAT <> max.EXDT
+        ********************************************************************/
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        DataPoint dpAction = afp.ActionDataPoint;
+        Subject sub = dpAction.Record.Subject;
+        Instance inst = dpAction.Record.DataPage.Instance;
+
+        // Variable Declaration Start
+        string EXDateOID = "EXDT";
+        string EXFormOID = "EX";
+        string DSETDateOID = "DSSTDAT";
+        string DSETFormOID = "DSET";
+
+        string queryText = "Completion/Discontinuation Date is not equal to the last Date of infusion on the Study drug administration eCRF. Please amend.";
+        int markingGroupID = 1;
+        bool responseRequired = false;
+        bool manualCloseRequired = false;
+        bool fireQuery = false;
+
+        DateTime EXDT = DateTime.MinValue;
+        DateTime maxdt = DateTime.MinValue;
+
+        if (dpAction != null && dpAction.Active)
+        {
+            //Get max EXDT
+            DataPoints dpEXDT = CustomFunction.FetchAllDataPointsForOIDPath(EXDateOID, EXFormOID, null, sub);
+
+            for (int i = 0; i < dpEXDT.Count; i++)
+            {
+                if (dpEXDT[i].Active && dpEXDT[i] != null && dpEXDT[i].Data.ToString() != string.Empty && dpEXDT[i].StandardValue() is DateTime)
+                {
+                    EXDT = Convert.ToDateTime(dpEXDT[i].StandardValue());
+
+                    if (EXDT >= maxdt)
+                        maxdt = EXDT;
+                }
+            }
+
+            if (dpAction.Data.ToString() != string.Empty && dpAction.StandardValue() is DateTime)
+            {
+                DateTime dtDSSTDAT = Convert.ToDateTime(dpAction.StandardValue());
+
+                if (maxdt != DateTime.MinValue && dtDSSTDAT != DateTime.MinValue)
+                {
+                    if (dtDSSTDAT != maxdt)
+                        fireQuery = true;
+                }
+            }
+
+            CustomFunction.PerformQueryAction(queryText, markingGroupID, responseRequired, manualCloseRequired, dpAction, fireQuery);
+        }
+
+        return null;

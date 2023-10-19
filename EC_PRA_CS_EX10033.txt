@@ -1,0 +1,63 @@
+/***********************************************************************
+        Check Name : EC_PRA_CS_EX10033
+        Programmer Name : kolie.bolleurs@iconplc.com
+        Date Created : 02-NOV-2022
+        Desc : 
+        Sum all durations of infusions in all records in the same folder (EXENTIM - EXSTTIM line 1) + (EXENTIM - EXSTTIM line 2) + … (EXENTIM - EXSTTIM line x) 
+        and (If the total duration < 4 hours and EXDOSINT = Y)
+        ********************************************************************/
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        DataPoint dpAction = afp.ActionDataPoint;
+        Subject sub = dpAction.Record.Subject;
+
+        const int SITE_BY_SYSTEM = 1;
+        const bool ANSWER_ON_CHANGE = false, CLOSE_ON_CHANGE = false;
+        const string QUERYTEXT = "The total infusion duration is more than 4 hours; however, Was the planned dose fully administered? is answered No. Please clarify.";
+
+        bool FireQuery = false;
+        bool TimeEntered = false;
+
+        TimeSpan tmSum = TimeSpan.Zero;
+
+        if (dpAction != null && dpAction.Active)
+        {
+            if (dpAction.Data == "N")
+            {
+                Records rcdsEX = dpAction.Record.DataPage.Records;
+                if (rcdsEX.Count > 1)
+                {
+                    for (int i = 1; i < rcdsEX.Count; i++)
+                    {
+                        if (rcdsEX[i] != null && rcdsEX[i].Active)
+                        {
+                            Record rcd = rcdsEX[i];
+
+                            DataPoint dpEXENTIM = rcd.DataPoints.FindByFieldOID("EXENTIM");
+                            DataPoint dpEXSTTIM = rcd.DataPoints.FindByFieldOID("EXSTTIM");
+    
+                            if (dpEXENTIM != null && dpEXSTTIM != null)
+                            {
+                                if (dpEXENTIM.Active && dpEXENTIM.Active && dpEXENTIM.Data.ToString() != string.Empty && dpEXENTIM.StandardValue() is TimeSpan &&
+                                    dpEXSTTIM.Active && dpEXSTTIM.Active && dpEXSTTIM.Data.ToString() != string.Empty && dpEXSTTIM.StandardValue() is TimeSpan)
+                                {
+                                    TimeEntered = true;
+                                    TimeSpan tmEXENTIM = (TimeSpan) dpEXENTIM.StandardValue();
+                                    TimeSpan tmEXSTTIM = (TimeSpan) dpEXSTTIM.StandardValue();
+                                    if (tmEXENTIM > tmEXSTTIM)
+                                    {
+                                        TimeSpan tmDiff = tmEXENTIM - tmEXSTTIM;
+                                        tmSum += tmDiff;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if ((tmSum.Hours > 4 || (tmSum.Hours == 4 && (tmSum.Minutes > 00 || tmSum.Seconds > 00)) && TimeEntered))
+                    FireQuery = true;
+            }
+            CustomFunction.PerformQueryAction(QUERYTEXT, SITE_BY_SYSTEM, ANSWER_ON_CHANGE, CLOSE_ON_CHANGE, dpAction, FireQuery);
+        }
+
+        return null;

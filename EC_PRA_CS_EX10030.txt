@@ -1,0 +1,45 @@
+// Developer: kolie.bolleurs@iconplc.com
+        // Date: 31OCT2022
+        // Custom Function: EC_PRA_CS_EX10030
+        // Edit Check/s: EC_PRA_CS_EX10030
+        // Short Description:
+        // EXDOSADJREAS = 2 (Other Adverse Event) or 1 (Infusion-related reaction) and no AE form has been submitted
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        Subject subj = afp.ActionDataPoint.Record.Subject;
+        DataPoint dpAction = afp.ActionDataPoint;
+
+        bool fireQuery = false;
+        string queryText = "Reason dose modified/adjusted is entered as 'Other Adverse Event' or 'Infusion-related reaction'; however, AE page is not entered. Please amend.";
+
+        int markingGroup = 1;
+        bool requiredResponse = false;
+        bool manualClose = false;
+
+        if (dpAction != null)
+        {
+            if (dpAction.Active && (dpAction.Data.ToString() == "1" || dpAction.Data.ToString() == "2"))
+            {
+                fireQuery = true;
+                Instance instTemp = subj.Instances.FindByFolderOID("AE");
+                if (instTemp != null)
+                {
+                    DataPage dpgAE = instTemp.DataPages.FindByFormOID("AE");
+
+                    if (dpgAE != null && dpgAE.Active)
+                    {
+                        Records rdsAE = dpgAE.Records;
+                        for (int j = 0; j < rdsAE.Count && fireQuery; j++)
+                        {
+                            Record rdAE = rdsAE[j];
+
+                            DataPoint dpAETERM = rdAE.DataPoints.FindByFieldOID("AETERM");
+                            if (dpAETERM != null && dpAETERM.ChangeCount > 0)
+                                fireQuery = false;
+                        }
+                    }
+                }
+            }
+            CustomFunction.PerformQueryAction(queryText, markingGroup, requiredResponse, manualClose, dpAction, fireQuery, afp.CheckID, afp.CheckHash);
+        }
+        return null;

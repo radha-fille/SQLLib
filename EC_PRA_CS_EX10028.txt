@@ -1,0 +1,264 @@
+/***********************************************************************
+Check Name : EC_PRA_CS_EX10028
+Programmer Name : kolie.bolleurs@iconplc.com
+Date Created : 01-NOV-2022
+Desc :
+EXDOSADJ = N and EXDOSPLAN (current folder) <> EXDOSPLAN (previous folder)
+DEVELOPER: the patient can switch between non-split and split dosing at any week of each cycle.
+EX.EXDOSPLAN will be made visible for split dosing only on the first dosing day of each week of each cycle (D1/D8/D15/D22).
+EX.EXDOSPLAN will be made visible on the dosing day of each week of each cycle (D1/D8/D15/D22).
+********************************************************************/
+
+ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+DataPoint dpAction = afp.ActionDataPoint;
+Subject subject = dpAction.Record.Subject;
+
+DataPoints dpsVISDAT = CustomFunction.FetchAllDataPointsForOIDPath("VISDAT", "VIS", null, subject);
+DataPoints dpsVISDATscr = CustomFunction.FetchAllDataPointsForOIDPath("VISDAT", "VIS", "SCREEN", subject);
+DataPoints dpsEX = CustomFunction.FetchAllDataPointsForOIDPath("EXDOSADJ", "EX", null, subject);
+DataPoints dpsVISDATFinal = new DataPoints();
+DataPoints dpsVISDATsorted = new DataPoints();
+
+Instance Instance = null;
+Instance ParentSubInstance = null;
+Instance CycleParentIns = null;
+
+DataPage dpgCONT = null;
+
+string strD1SDYN = string.Empty;
+string strD8SDYN = string.Empty;
+string strD15SDYN = string.Empty;
+string strD22SDYN = string.Empty;
+
+const int SITE_BY_SYSTEM = 1;
+const bool ANSWER_ON_CHANGE = false, CLOSE_ON_CHANGE = false;
+const string QUERYTEXT = "Possible Protocol Deviation: Was dose modified/adjusted since last visit planned dose? is No; however, Planned dose reported in this visit is different from the one in the previous visit. Please amend.";
+
+bool fireQuery = false;
+
+ClearQueries(dpsEX, SITE_BY_SYSTEM, ANSWER_ON_CHANGE, CLOSE_ON_CHANGE, QUERYTEXT, afp);
+
+if (dpsVISDAT.Count > 0)
+{
+for (int i = 0; i < dpsVISDAT.Count; i++)
+{
+strD1SDYN = string.Empty;
+strD8SDYN = string.Empty;
+strD15SDYN = string.Empty;
+strD22SDYN = string.Empty;
+
+if (dpsVISDAT[i] != null && dpsVISDAT[i].Active && dpsVISDAT[i].Data.ToString() != string.Empty && dpsVISDAT[i].StandardValue() is DateTime)
+{
+Instance = dpsVISDAT[i].Record.Instance;
+if (Instance != null)
+{
+if (Instance.Active)
+{
+string strFolderOID = Instance.Folder.OID;
+if (strFolderOID.Contains("D1") || strFolderOID.Contains("D8") || strFolderOID.Contains("D15") || strFolderOID.Contains("D22"))
+{
+ParentSubInstance = Instance.ParentInstance;
+if (ParentSubInstance != null)
+{
+if (ParentSubInstance.Active)
+{
+CycleParentIns = ParentSubInstance.ParentInstance;
+if (CycleParentIns != null)
+{
+if (CycleParentIns.Active)
+{
+dpgCONT = CycleParentIns.DataPages.FindByFormOID("CONT");
+if (dpgCONT != null)
+{
+if (dpgCONT.Active)
+{
+DataPoint dpD1SDYN = dpgCONT.MasterRecord.DataPoints.FindByFieldOID("D1SDYN");
+DataPoint dpD8SDYN = dpgCONT.MasterRecord.DataPoints.FindByFieldOID("D8SDYN");
+DataPoint dpD15SDYN = dpgCONT.MasterRecord.DataPoints.FindByFieldOID("D15SDYN");
+DataPoint dpD22SDYN = dpgCONT.MasterRecord.DataPoints.FindByFieldOID("D22SDYN");
+
+if (dpD1SDYN != null)
+{
+if (dpD1SDYN.Active && dpD1SDYN.Data != string.Empty)
+strD1SDYN = dpD1SDYN.Data ;
+}
+if (dpD8SDYN != null)
+{
+if (dpD8SDYN.Active && dpD8SDYN.Data != string.Empty)
+strD8SDYN = dpD8SDYN.Data ;
+}
+if (dpD15SDYN != null)
+{
+if (dpD15SDYN.Active && dpD15SDYN.Data != string.Empty)
+strD15SDYN = dpD15SDYN.Data ;
+}
+if (dpD22SDYN != null)
+{
+if (dpD22SDYN.Active && dpD22SDYN.Data != string.Empty)
+strD22SDYN = dpD22SDYN.Data ;
+}
+if (strD1SDYN != string.Empty || strD8SDYN != string.Empty ||strD15SDYN != string.Empty || strD22SDYN != string.Empty)
+dpsVISDATFinal.Add(PutVisitDps(dpsVISDAT[i], strD1SDYN, strD8SDYN, strD15SDYN, strD22SDYN));
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+
+dpsVISDATsorted = GetSorteddps(dpsVISDATFinal);
+
+if (dpsVISDATsorted.Count > 0)
+{
+for (int j = 0; j < dpsVISDATsorted.Count; j++)
+{
+fireQuery = false;
+Instance InsSortedCur = dpsVISDATsorted[j].Record.Instance;
+string FolderCur = InsSortedCur.Folder.Name;
+
+if (j > 0)
+{
+Instance InsSortedPrev = dpsVISDATsorted[j-1].Record.Instance;
+
+if (InsSortedCur != null && InsSortedPrev != null)
+{
+if (InsSortedCur.Active && InsSortedPrev.Active)
+{
+if (!FolderCur.Contains("Day 1 "))
+{
+DataPage dpgEXCurr = InsSortedCur.DataPages.FindByFormOID("EX");
+DataPage dpgEXPrev = InsSortedPrev.DataPages.FindByFormOID("EX");
+
+if (dpgEXCurr != null && dpgEXPrev != null)
+{
+if (dpgEXCurr.Active && dpgEXPrev.Active)
+{
+DataPoint dpEXDOSADJCurr = dpgEXCurr.MasterRecord.DataPoints.FindByFieldOID("EXDOSADJ");
+DataPoint dpEXDOSPLANCurr = dpgEXCurr.MasterRecord.DataPoints.FindByFieldOID("EXDOSPLAN");
+DataPoint dpEXDOSPLANPrev = dpgEXPrev.MasterRecord.DataPoints.FindByFieldOID("EXDOSPLAN");
+
+if (dpEXDOSADJCurr != null && dpEXDOSPLANCurr != null && dpEXDOSPLANPrev != null)
+{
+if (dpEXDOSADJCurr.Active && dpEXDOSADJCurr.Data == "N")
+{
+if (dpEXDOSPLANCurr.Data.ToString() != dpEXDOSPLANPrev.Data.ToString())
+fireQuery = true;
+}
+}
+
+CustomFunction.PerformQueryAction(QUERYTEXT, SITE_BY_SYSTEM, ANSWER_ON_CHANGE, CLOSE_ON_CHANGE, dpEXDOSADJCurr, fireQuery, afp.CheckID, afp.CheckHash);
+}
+}
+}
+}
+}
+}
+}
+}
+
+return null;
+}
+
+void ClearQueries(DataPoints dpsEX, int SITE_BY_SYSTEM, bool ANSWER_ON_CHANGE, bool CLOSE_ON_CHANGE, string QUERYTEXT, ActionFunctionParams afp)
+{
+if (dpsEX.Count > 0)
+{
+for (int k = 0; k < dpsEX.Count; k++)
+{
+if (dpsEX[k] != null)
+CustomFunction.PerformQueryAction(QUERYTEXT, SITE_BY_SYSTEM, ANSWER_ON_CHANGE, CLOSE_ON_CHANGE, dpsEX[k], false, afp.CheckID, afp.CheckHash);
+}
+}
+}
+
+DataPoint PutVisitDps(DataPoint dpVISDAT, string strD1SDYN, string strD8SDYN, string strD15SDYN, string strD22SDYN)
+{
+Instance inst = dpVISDAT.Record.Instance;
+string strFoldername = inst.Folder.Name;
+
+if (strD1SDYN == "Y")
+{
+if (!strFoldername.Contains("No Split") && strFoldername.Contains("Day 1"))
+return dpVISDAT;
+}
+else if (strD1SDYN == "N")
+{
+if (strFoldername.Contains("No Split") && strFoldername.Contains("Day 1"))
+return dpVISDAT;
+}
+
+if (strD8SDYN == "Y")
+{
+if (!strFoldername.Contains("No Split") && strFoldername.Contains("Day 8"))
+return dpVISDAT;
+}
+else if (strD8SDYN == "N")
+{
+if (strFoldername.Contains("No Split") && strFoldername.Contains("Day 8"))
+return dpVISDAT;
+}
+
+if (strD15SDYN == "Y")
+{
+if (!strFoldername.Contains("No Split") && strFoldername.Contains("Day 15"))
+return dpVISDAT;
+}
+else if (strD15SDYN == "N")
+{
+if (strFoldername.Contains("No Split") && strFoldername.Contains("Day 15"))
+return dpVISDAT;
+}
+
+if (strD22SDYN == "Y")
+{
+if (!strFoldername.Contains("No Split") && strFoldername.Contains("Day 22"))
+return dpVISDAT;
+}
+else if (strD22SDYN == "N")
+{
+if (strFoldername.Contains("No Split") && strFoldername.Contains("Day 22"))
+return dpVISDAT;
+}
+return null;
+}
+
+DataPoints GetSorteddps(DataPoints dps)
+{
+DataPoints dpsSorted = new DataPoints();
+ArrayList arList = new ArrayList();
+for (int i = 0; i < dps.Count; i++)
+{
+arList.Add(dps[i]);
+}
+DataPoint dttemp = null;
+for (int j = 0; j < arList.Count; j++)
+{
+for (int i = 0; i < arList.Count - 1; i++)
+{
+DataPoint dpCurrent = (DataPoint) arList[i];
+DataPoint dpNext = (DataPoint) arList[i + 1];
+if (dpCurrent != null & dpNext != null)
+{
+DateTime dtCurrent = (DateTime) dpCurrent.StandardValue();
+DateTime dtNext = (DateTime) dpNext.StandardValue();
+if (dtCurrent > dtNext)
+{
+dttemp = (DataPoint) arList[i + 1];
+arList[i + 1] = arList[i];
+arList[i] = dttemp;
+}
+}
+}
+}
+
+for (int i = 0; i < arList.Count; i++)
+{
+dpsSorted.Add((DataPoint) arList[i]);
+}
+return dpsSorted;

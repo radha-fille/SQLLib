@@ -1,0 +1,62 @@
+/***********************************************************************
+        Check Name : EC_PRA_CS_DS10003
+        Programmer Name : kolie.bolleurs@iconplc.com
+        Edit Checks : EC_PRA_CS_DS10003, EC_PRA_CS_DS10003_CROSS
+        Date Created : 27-OCT-2022
+        Desc : DSIC.PVPRID <> SUBJ.SUBJID for any subject in study, or is the same Subject ID as current subject
+        ********************************************************************/
+
+        ActionFunctionParams afp = (ActionFunctionParams) ThisObject;
+        DataPoint dpAction = afp.ActionDataPoint;
+        Interaction intCur = afp.ActionDataPoint.Interaction;
+        Subject subSrc = dpAction.Record.Subject;
+
+        string strENV = subSrc.StudySite.Study.Environment.ToUpper();
+
+        StudySites StudySites = dpAction.Record.Subject.StudySite.Study.StudySites;
+
+        int markingGroupID = 1;
+        bool responseRequired = false;
+        bool manualCloseRequired = false;
+        bool fireQuery = false;
+
+        DataPoint dpPVPRYN = null;
+
+        string querytext = "Original Subject Identifier is not a valid Subject ID in this study or is the same Subject ID as current subject. Please amend.";
+
+        if (dpAction != null && dpAction.Active && dpAction.Data != string.Empty)
+        {
+            dpPVPRYN = dpAction.Record.DataPoints.FindByFieldOID("PVPRYN");
+            if (StudySites.Count > 0)
+            {
+                fireQuery = true;
+                for (int i = 0; i < StudySites.Count && fireQuery; i++)
+                {
+                    Subject SiteSub = StudySites[i].Subjects.FindBySubjectName(dpAction.Data);
+
+                    if (SiteSub != null)
+                    {
+                        string SiteENV = SiteSub.StudySite.Study.Environment.ToUpper();
+                        DataPoint dpSiteSUBJID = SiteSub.PrimaryDataPage.MasterRecord.DataPoints.FindByFieldOID("SUBJID");
+                        if (dpSiteSUBJID != null)
+                        {
+                            if (dpSiteSUBJID.Active && dpSiteSUBJID.Data == dpAction.Data && SiteENV == strENV)
+                                fireQuery = false;
+                        }
+                    }
+                }
+            }
+        }
+        if (!fireQuery)
+        {
+            DataPoint dpSUBJID = subSrc.PrimaryDataPage.MasterRecord.DataPoints.FindByFieldOID("SUBJID");
+            if (dpSUBJID != null)
+            {
+                if (dpSUBJID.Active && dpSUBJID.Data == dpAction.Data)
+                    fireQuery = true;
+            }
+        }
+        if (dpPVPRYN != null)
+            CustomFunction.PerformQueryAction(querytext, markingGroupID, responseRequired, manualCloseRequired, dpPVPRYN, fireQuery);
+
+        return null;
