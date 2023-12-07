@@ -1,0 +1,118 @@
+--complex insert package using sp
+
+create table #tmp_userDueDates(
+	userID int, IDnumber varchar(50), fullname varchar(90),
+	hiredate datetime,
+	assignmentID int,
+	assignmentTrackID int,
+	contentID int, 
+	contentTrackID int,
+	contentTypeID int, 
+	dueDate datetime, 
+	appearForDate datetime, 
+	qeDate datetime,
+	contentCompletionID int, 
+	completionTypeID int,
+	contentCompletionDate datetime,
+	contentOverrideID int, 
+	isElective bit,
+	isComplete bit, 
+	isStarted BIT,
+	allowSharedCredit bit,
+	allowDedupe bit)
+
+--find the assignment duedate to use for @start/enddates below
+
+--select *
+--from assignment
+--where assignmentid = 54869
+
+--this creates the old "user2course" table
+
+
+exec [dbo].[sp_assignment_due_dates_by_course_filtered] 
+	@institutionID=453,
+	@courseidlist = '447179',
+	@startdate =null,
+	@enddate = null,
+	@ouList = null, 
+	@deptList = null, 
+	@jobtitleList = null, 
+	@jobcategoryList = null, 
+	@empTypeList = null, 
+	@adminOUID  = NULL,
+	@includeAdminDeleted = 1,
+	@debug = 0
+
+--took 5 mins to run; was it restricted correctly? @startdate/@enddate correspond to "appearfordate" parameters?
+
+
+SELECT *
+into #compare--added to use to better id co deletes
+FROM #tmp_userDueDates 
+WHERE (completiontypeid IS NULL
+OR completiontypeid IN (0, 4))
+order by userid
+
+--136
+
+--contentcompletion table only displays coursework where the student had click on the link and a contentcompletionid is created, even
+--if iscomplete = 0 (old lvd is not null concept).
+
+/****Insert Suppressions, adding any additional restrictions****/
+
+
+/* Two Steps to suppression*/
+/*1. Update existing completions (WHICH MEANS DATA DIRECTLY
+FROM THE CONTENTCOMPLETION TABLE - IF THERE IS ANY, MUST RUN THIS STEP
+ */--don't execute this step since only want to remove incomplete coursework?
+
+SELECT cc.*
+update cc set completiontypeid=7, completiondate=getdate(), iscomplete=1
+FROM contentcompletion cc
+JOIN #tmp_userDueDates t ON cc.contentcompletionID=t.contentcompletionID
+where t.completiontypeid IN (0,4)
+
+--4
+
+/*2. Insert when no existing completions*/
+DECLARE @institutionid INT
+SELECT @institutionid=453
+
+
+insert contentcompletion (userid,
+institutionid,
+contentid,
+contenttypeid,
+assignmentid,
+creationdate,
+completiondate,
+completiontypeid, 
+iscomplete,
+iselective,
+score, 
+duedate,
+appearfordate,
+softcreditfromid,
+lastupdateid,
+lastupdate)
+select userid,
+@institutionid,
+contentid,
+contenttypeid,
+assignmentid,
+getdate(),
+GETDATE(),
+7, 
+1,
+iselective,
+null, 
+duedate,
+appearfordate,
+NULL,
+77,--added b/c if you have to re-insert suppressed data, it will create data in a column visibile through admin inbox interface
+getdate()
+--select *
+from #tmp_userduedates 
+where ISCOMPLETE=0
+AND COMPLETIONTYPEid is null

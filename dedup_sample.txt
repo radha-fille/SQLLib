@@ -1,0 +1,63 @@
+--dedup and merge:
+
+declare @mergeuserid int, 
+	@keepuserid int, 
+	@addressid int
+
+select @mergeuserid=77425,
+		@keepuserid=1211690
+
+--9/13/10 RAB  added this block
+--switch the assignment to new user
+--select * from assignment2users a
+update assignment2users set userid=@keepuserid
+where userid=@mergeuserid
+and assignmentid not in (select assignmentid from assignment2users where userid=@keepuserid)
+
+--delete mergeuser row if both dupes are assigned
+--select * from assignment2users a
+delete assignment2users
+where userid=@mergeuserid
+and assignmentid in (select assignmentid from assignment2users where userid=@keepuserid)
+
+
+--select *
+update contentoverride
+set userid = @keepuserid
+--from contentoverride
+where userid = @mergeuserid
+--order by contentid--to see what duplicates there are
+--5
+
+--select *
+update sa 	set userid=@keepuserid
+from studentassessment sa
+join contentcompletion cc on cc.contentcompletionid=sa.contentcompletionid
+where cc.userid=@mergeuserid
+
+
+--select *
+update contentcompletion
+set userid = @keepuserid
+--from contentcompletion
+where userid = @mergeuserid
+--order by contentid --to see what duplicates there are
+--2
+
+
+--remove corollary student data
+delete user2jobtitle where userID=@mergeuserid
+delete user2department where userID=@mergeuserid
+delete user2facility where userID=@mergeuserid
+delete userpreference where userID=@mergeuserid
+delete usersearch2user where userID=@mergeuserid
+--delete assignment2users where userID=@mergeuserid /* modify, don't delete! 9/14/10 RAB*/
+delete user2employmenttype where userID=@mergeuserid
+
+--get addressid for deletion below
+
+select @addressid=homeaddressid
+from users where userID=@mergeuserid
+
+delete users where userID=@mergeuserid
+delete address where addressID=@addressid

@@ -1,0 +1,158 @@
+--DB structure daily check:
+
+Notes:
+This script is only used to verify that problems exist with a client's org structure.  The problem
+can be resolved through the LMS:
++ Log on to the client site as an admin
++ navigate to Update Global Settings > Organizational Structure
++ Locate the problem facility
++ Click the Edit link
++ Click the Save Changes button
+
+The code, sp_u_ou2facility, only moves one level underneath, not the entire structure.
+
+See US592 for discussion.
+
+This code is based on the following procedure:
+
+/****** Object:  StoredProcedure [dbo].[sp_u_ou2facility]    Script Date: 03/08/2011 12:27:33 ******/
+*/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+/*
+drop table #tmp_ou2facility
+drop table #tmp_missing
+drop table #tmp_extra
+*/
+create table #tmp_ou2facility(institutionID int, OrganizationalUnitID int, facilityID int)
+
+declare @insID int, @OUID int, @facilityID int, @parentOUID int
+
+
+declare facilityOUCursor 
+	CURSOR for select ou.institutionID, ou.organizationalUnitID, 
+	ou.parentOrganizationalUnitID, 
+	ou.facilityID 
+	From organizationalUnit ou 
+	where ou.facilityID is not null
+	and ou.institutionID in (select institutionID from institution where active = 1) 
+OPEN  facilityOUCursor
+fetch next from  facilityOUCursor into @insID, @OUID, @parentOUID, @facilityID
+while @@fetch_status=0
+begin
+	--not top OU
+	While (@OUID <> @parentOUID) Begin	
+			begin
+				insert into #tmp_ou2facility values (@insID, @OUID, @facilityID)
+				select @insID = institutionID,
+				@OUID = organizationalUnitID, 
+				@parentOUID = parentOrganizationalUnitID 
+				from organizationalUnit 
+				where organizationalUnitID = @parentOUID
+			end
+	end
+		begin
+			--top OU
+			insert into #tmp_ou2facility values (@insID, @OUID, @facilityID)
+		end
+	fetch next from  facilityOUCursor into @insID, @OUID, @parentOUID, @facilityID
+end
+close  facilityOUCursor
+deallocate facilityOUCursor
+
+--select * from #tmp_ou2facility where institutionID = 1150
+
+/*
+/*This will list the OU to facility relationship determined by the above code*/
+select 
+t2f.institutionID,
+ins.name AS institution,
+ins.regionId,
+lur.name AS region,
+t2f.OrganizationalUnitID,
+ou.name AS orgUnit,
+t2f.facilityID,
+fac.name AS facility
+from #tmp_ou2facility t2f
+inner join organizationalUnit ou ON t2f.OrganizationalUnitID = ou.organizationalUnitID and t2f.institutionID = ou.institutionID
+inner join facility fac ON t2f.facilityID = fac.facilityID and t2f.institutionID = fac.institutionID
+inner join institution ins ON t2f.institutionID = ins.institutionID
+inner join lookupregion lur ON ins.regionId = lur.regionid
+where t2f.facilityID is not null
+--and t2f.institutionID = 823 and t2f.facilityID in (16687, 16690, 16696, 16702, 16705, 16699, 16668)
+order by t2f.facilityID, t2f.OrganizationalUnitID 
+*/
+--/*This is the current number of records in the organizationalUnit2facility table*/
+--select COUNT(*) from organizationalUnit2facility where organizationalUnitID in 
+--(select organizationalUnitID from organizationalUnit where institutionID in (select institutionID from institution where active = 1))
+
+
+/****************************************************************/
+--This will list all of the records in the temp table that
+--do not currently appear in the table organizationalunit2facility
+/****************************************************************/
+		
+--select * from lookupregion
+		
+	select 
+	t.institutionID,
+	ins.name AS institution,
+	ins.regionId,
+	lur.name AS region,
+	t.organizationalunitID, 
+	ou.name AS orgUnit,
+	t.facilityID,
+	f.name AS facility
+	into #tmp_missing
+	from #tmp_ou2facility t
+	inner join organizationalUnit ou on t.OrganizationalUnitID = ou.organizationalUnitID and t.institutionID = ou.institutionID
+	inner join facility f on t.facilityid=f.facilityid and t.institutionID = f.institutionID
+	inner join institution ins ON t.institutionID = ins.institutionID
+	inner join lookupregion lur ON ins.regionId = lur.regionid
+	left outer join organizationalunit2facility o2f on t.facilityid=o2f.facilityid and t.organizationalunitID=o2f.organizationalunitID
+	--where lur.regionid = 8 
+	where t.facilityID not in (select facilityID from organizationalunit2facility)
+	and o2f.organizationalunitID is null
+	
+	
+	select 'Missing OU2Facility records to be added through the interface' AS [message]	
+	/*List of missing OU to facility records*/
+	select * from #tmp_missing tm
+	--where regionID = 7
+	order by 
+	tm.region,
+	tm.institution,
+	tm.OrgUnit, 
+	tm.facility
+	
+	
+	/*List of extra OU to facility records*/
+	select ou2f.organizationalUnitID, ou2f.facilityID, ou.institutionID
+	into #tmp_extra
+	from organizationalunit2facility ou2f
+	inner join organizationalUnit ou ON ou2f.organizationalUnitID = ou.organizationalUnitID
+	--where ou.institutionID = 529
+	EXCEPT
+	select organizationalunitID, facilityID, institutionID from #tmp_ou2facility
+	
+	
+	select 'Extra OU2Facility records to be deleted through the interface' AS [message]	
+	
+	select
+	te.institutionID,
+	ins.name AS institution,
+	ins.regionId,
+	lur.name AS region,
+	te.organizationalunitID, 
+	ou.name AS orgUnit,
+	te.facilityID,
+	f.name AS facility 
+	from #tmp_extra te
+	inner join organizationalUnit ou on te.OrganizationalUnitID = ou.organizationalUnitID and te.institutionID = ou.institutionID and ou.active = 1
+	inner join facility f on te.facilityid=f.facilityid and te.institutionID = f.institutionID and f.active = 1
+	inner join institution ins ON te.institutionID = ins.institutionID and ins.active = 1
+	inner join lookupregion lur ON ins.regionId = lur.regionid
+	--where te.institutionID = 823
+	order by region, institution, orgUnit, facility

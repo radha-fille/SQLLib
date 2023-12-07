@@ -1,0 +1,12 @@
+declare @nextid int
+
+set @nextid=(select min(departmentid) from #baddepts)
+
+while @nextid is not null
+begin 
+--do work
+
+exec sp_delete_department @nextid
+
+set @nextid=(select min(departmentid) from #baddepts where departmentid>@nextid)
+end
